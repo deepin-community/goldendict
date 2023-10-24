@@ -1,0 +1,3 @@
+# Manual HTML files
+source-is-missing [qtsingleapplication/doc/html/qtsingleapplication-example-loader.html]
+source: source-is-missing [qtsingleapplication/doc/html/qtsingleapplication.html]

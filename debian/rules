@@ -1,4 +1,20 @@
 #!/usr/bin/make -f
+# -*- makefile -*-
+# Uncomment this to turn on verbose mode.
+# export DH_VERBOSE=1
+
+# see FEATURE AREAS in dpkg-buildflags(1)
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+export QT_SELECT := 5
 
 %:
-	dh $@
+	dh $@ --buildsystem=qmake
+
+override_dh_auto_configure:
+	dh_auto_configure -- \
+	        CONFIG+=chinese_conversion_support \
+	        CONFIG+=zim_support \
+		goldendict.pro
+
+execute_before_dh_install:
+	pod2man debian/goldendict.pod debian/goldendict.1

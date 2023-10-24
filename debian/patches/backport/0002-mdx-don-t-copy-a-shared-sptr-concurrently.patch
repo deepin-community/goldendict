@@ -1,0 +1,63 @@
+From: Igor Kushnir <igorkuo@gmail.com>
+Date: Sat, 10 Jun 2023 20:55:00 +0300
+Subject: mdx: don't copy a shared sptr concurrently
+
+ThreadSanitizer reports a data race:
+  Read of size 4 at 0x7b040003edb0 by thread T19:
+    #0 sptr_base<Mdx::IndexedMdd>::increment() ../sptr.hh:23
+    #1 sptr_base<Mdx::IndexedMdd>::sptr_base(sptr_base<Mdx::IndexedMdd> const&) ../sptr.hh:35
+    #2 sptr<Mdx::IndexedMdd>::sptr(sptr<Mdx::IndexedMdd> const&) ../sptr.hh:93
+    #3 Mdx::MddResourceRequest::run() ../mdx.cc:849
+    #4 Mdx::MddResourceRequestRunnable::run() ../mdx.cc:791
+    #5 <null> <null> (libQt5Core.so.5+0xe8710)
+
+  Previous write of size 4 at 0x7b040003edb0 by thread T18:
+    #0 sptr_base<Mdx::IndexedMdd>::increment() ../sptr.hh:23
+    #1 sptr_base<Mdx::IndexedMdd>::sptr_base(sptr_base<Mdx::IndexedMdd> const&) ../sptr.hh:35
+    #2 sptr<Mdx::IndexedMdd>::sptr(sptr<Mdx::IndexedMdd> const&) ../sptr.hh:93
+    #3 Mdx::MddResourceRequest::run() ../mdx.cc:849
+    #4 Mdx::MddResourceRequestRunnable::run() ../mdx.cc:791
+    #5 <null> <null> (libQt5Core.so.5+0xe8710)
+
+dict.mddResources is shared and accessed concurrently by several
+separate MddResourceRequest objects. The line
+`sptr< IndexedMdd > mddResource = *i;` contains a data race, because
+sptr is not thread-safe as sptr_base::count is not atomic.
+
+MdxDictionary::mddResources and its elements are not modified after the
+initialization in MdxDictionary::doDeferredInit(). Simply dereference
+the pointer instead of copying a sptr element of mddResources to
+eliminate the data race.
+
+The crash reported in #1653 may be caused by this data race.
+
+Apply the same fix to duplicate code in
+MdxDictionary::getCachedFileName().
+---
+ mdx.cc | 6 ++----
+ 1 file changed, 2 insertions(+), 4 deletions(-)
+
+diff --git a/mdx.cc b/mdx.cc
+index 0f815ca..f9d577e 100644
+--- a/mdx.cc
++++ b/mdx.cc
+@@ -846,8 +846,7 @@ void MddResourceRequest::run()
+       for ( vector< sptr< IndexedMdd > >::const_iterator i = dict.mddResources.begin();
+             i != dict.mddResources.end(); ++i  )
+       {
+-        sptr< IndexedMdd > mddResource = *i;
+-        if ( mddResource->loadFile( resourceName, data ) )
++        if ( ( *i )->loadFile( resourceName, data ) )
+           break;
+       }
+     }
+@@ -1440,8 +1439,7 @@ QString MdxDictionary::getCachedFileName( QString filename )
+           for ( vector< sptr< IndexedMdd > >::const_iterator i = mddResources.begin();
+                 i != mddResources.end(); ++i )
+           {
+-            sptr< IndexedMdd > mddResource = *i;
+-            if ( mddResource->loadFile( resourceName, data ) )
++            if ( ( *i )->loadFile( resourceName, data ) )
+               break;
+           }
+         }
