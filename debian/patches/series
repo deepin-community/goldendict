@@ -1,0 +1,2 @@
+0001-Disable-default-autostart.patch
+backport/0002-mdx-don-t-copy-a-shared-sptr-concurrently.patch
